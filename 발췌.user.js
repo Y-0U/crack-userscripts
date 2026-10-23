@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         📑크랙 발췌
 // @namespace    https://crack.wrtn.ai/
-// @version      1.0.4
+// @version      1.0.5
 // @description  크랙 문장 선택 → 발췌 카드 (1440x1440 PNG). 검열 프리셋, 기본/커스텀 배경, Pretendard/부크크 명조 Light, 웹폰트 지원.
 // @match        https://crack.wrtn.ai/*
 // @match        https://*.crack.wrtn.ai/*
@@ -11,8 +11,8 @@
 
 (() => {
   'use strict';
-  if (window.__crackExcerptCardV104) return;
-  window.__crackExcerptCardV104 = true;
+  if (window.__crackExcerptCardV105) return;
+  window.__crackExcerptCardV105 = true;
 
   const KEY = 'crack-excerpt-card-v1';
   const SIZE_PRESETS = { small:{label:'작게', body:54, title:42}, large:{label:'크게', body:62, title:42} };
@@ -150,19 +150,22 @@
   const fontSelect=el('select',{'aria-label':'글꼴 선택'});fontSelect.style.flex='1';fontRow.append(fontSelect);
   fontSelect.addEventListener('change',()=>{settings.font=fontSelect.value;persist();scheduleRender();});
   const fadd=el('div',{class:'group'});fontGroup.append(fadd);
-  const fname=el('input',{type:'text',placeholder:'추가 폰트 이름'});
-  const furl=el('input',{type:'url',placeholder:'웹폰트 CSS 또는 .woff2/.woff 주소 (https://...)'});
-  const ffamily=el('input',{type:'text',placeholder:'CSS 주소일 때 font-family 이름 (선택)'});
-  fadd.append(fname,furl,ffamily);
+  const fontCssBox=el('textarea',{rows:'5','aria-label':'웹폰트 CSS 코드',placeholder:"@font-face {\n  font-family: 'Paperozi';\n  src: url('https://.../Paperlogy-4Regular.woff2') format('woff2');\n  font-weight: 400;\n}"});
+  fadd.append(fontCssBox);
   const fontBtns=row(fadd);
-  btn(fontBtns,'+ 웹폰트 등록',()=>{
-    const name=fname.value.trim(),url=furl.value.trim();
-    if(!name||!/^https:\/\//i.test(url)){status('폰트 이름과 https:// 주소를 입력해 주세요.');return;}
-    if(!(/\.(woff2?|ttf|otf)(\?|#|$)/i.test(url)||/\.css(\?|#|$)/i.test(url))){status('웹폰트 파일(.woff/.woff2/.ttf/.otf) 또는 CSS(.css) 주소를 입력해 주세요.');return;}
-    const id='font'+Date.now();settings.customFonts.push({id,name,url,family:ffamily.value.trim()||name});settings.font=id;persist();refreshFonts();scheduleRender();fname.value='';furl.value='';ffamily.value='';
+  btn(fontBtns,'+ 웹폰트 등록',async()=>{
+    let spec;
+    try{spec=parseFontInput(fontCssBox.value);}catch(e){status(e.message);return;}
+    const id='font'+Date.now();
+    const newFont={id,name:spec.family||'추가 웹폰트',family:spec.family||'추가 웹폰트',url:spec.url,weight:spec.weight};
+    settings.customFonts.push(newFont);settings.font=id;persist();refreshFonts();
+    fontCache.delete(id);
+    try{await ensureFont();fontCssBox.value='';status('웹폰트가 적용되었어요.');}
+    catch(e){status('폰트를 불러오지 못했어요. 주소와 CORS 설정을 확인해 주세요: '+e.message);}
+    scheduleRender();
   });
   btn(fontBtns,'선택 폰트 삭제',()=>{if(!settings.font.startsWith('font'))return;settings.customFonts=settings.customFonts.filter(x=>x.id!==settings.font);settings.font='pretendard';persist();refreshFonts();scheduleRender();});
-  fontGroup.append(el('div',{class:'hint'},'직접 폰트 파일 URL 또는 .css 주소를 등록할 수 있어요. CSS 방식은 해당 CSS에 정의된 font-family 이름을 입력하면 정확해요.'));
+  fontGroup.append(el('div',{class:'hint'},'@font-face 코드를 그대로 붙여넣어 주세요. 폰트 이름과 파일 주소를 자동 인식하고 저장해요. 기존에 등록한 폰트도 그대로 유지됩니다.'));
   const sizeGroup=group('본문 글자 크기');const sizeRow=row(sizeGroup);
   btn(sizeRow,'작게',()=>{settings.sizeMode='small';persist();updateChips();scheduleRender();},'chip').dataset.sizeMode='small';
   btn(sizeRow,'크게',()=>{settings.sizeMode='large';persist();updateChips();scheduleRender();},'chip').dataset.sizeMode='large';
@@ -250,21 +253,46 @@
     const ff=new FontFace(name,`url("${url.replace(/"/g,'%22')}")`,{weight});
     return ff.load().then(x=>{document.fonts.add(x);return name;});
   }
+  function parseFontInput(source){
+    const raw=String(source||'').trim();
+    if(!raw)throw Error('웹폰트 CSS 코드를 붙여넣어 주세요.');
+    const block=raw.match(/@font-face\s*\{([\s\S]*?)\}/i);
+    if(!block)throw Error('@font-face { ... } 형태의 CSS 코드를 입력해 주세요.');
+    const css=block[1];
+    const familyMatch=css.match(/font-family\s*:\s*(?:["']([^"']+)["']|([^;\n}]+))/i);
+    const family=(familyMatch?.[1]||familyMatch?.[2]||'').trim();
+    const src=css.match(/src\s*:\s*([^;}]*)/i)?.[1]||'';
+    const urlMatch=src.match(/url\(\s*(?:["']([^"']+)["']|([^\s)]+))\s*\)/i);
+    const url=(urlMatch?.[1]||urlMatch?.[2]||'').trim();
+    if(!family)throw Error('CSS 코드에서 font-family를 찾지 못했어요.');
+    if(!/^https:\/\//i.test(url)||!/\.(woff2?|ttf|otf)(?:[?#]|$)/i.test(url))throw Error('https://로 시작하는 폰트 파일(.woff2/.woff/.ttf/.otf) 주소가 필요해요.');
+    const weight=(css.match(/font-weight\s*:\s*([1-9]00|normal|bold)/i)?.[1]||'400').toLowerCase();
+    return {family,url,weight:weight==='normal'?'400':weight==='bold'?'700':weight};
+  }
   const fontCache=new Map();
-  async function ensureFont(){const found=settings.customFonts.find(f=>f.id===settings.font);
-    let key=settings.font,family='PretendardExcerpt',promise;
-    if(settings.font==='bookk'){family='BookkExcerptLight';promise=()=>loadFontFace(family,FONT_BOOKK,'400');}
-    else if(settings.font==='pretendard'){family='PretendardExcerpt';promise=()=>loadFontFace(family,FONT_PRETENDARD,'400');}
-    else if(found){family=found.family;
-      promise=()=>{if(/\.css(\?|#|$)/i.test(found.url)){
+  async function ensureFont(){
+    const found=settings.customFonts.find(f=>f.id===settings.font);
+    const key=settings.font;
+    let family, url, weight='400';
+    if(key==='bookk'){family='BookkExcerptLight';url=FONT_BOOKK;}
+    else if(key==='pretendard'){family='PretendardExcerpt';url=FONT_PRETENDARD;}
+    else if(found){
+      // Legacy entries using direct font URLs remain compatible.
+      if(/\.css(?:[?#]|$)/i.test(found.url)){
+        family=found.family||found.name;
         if(!document.querySelector(`link[data-excerpt-font="${found.id}"]`)){
           const link=el('link',{rel:'stylesheet',href:found.url,'data-excerpt-font':found.id});document.head.append(link);
+          await new Promise((resolve,reject)=>{link.onload=resolve;link.onerror=()=>reject(Error('CSS 파일 로딩 실패'));});
         }
-        return document.fonts.load(`400 60px "${family.replace(/"/g,'')}"`,'가나다').then(()=>family);
+        await document.fonts.load(`400 60px "${family.replace(/"/g,'')}"`,'가나다');
+        if(!document.fonts.check(`400 60px "${family.replace(/"/g,'')}"`,'가나다'))throw Error('폰트가 로드되지 않았어요.');
+        return family;
       }
-      family='UserExcerpt'+found.id;return loadFontFace(family,found.url,'400');};
+      family='UserExcerpt'+found.id.replace(/[^a-zA-Z0-9]/g,'');
+      url=found.url;
+      weight=found.weight||'400';
     }else return 'sans-serif';
-    if(!fontCache.has(key))fontCache.set(key,promise().catch(e=>{fontCache.delete(key);throw e;}));
+    if(!fontCache.has(key))fontCache.set(key,loadFontFace(family,url,weight).catch(e=>{fontCache.delete(key);throw e;}));
     await fontCache.get(key);return family;
   }
   function wrap(ctx,text,maxWidth){const lines=[];
