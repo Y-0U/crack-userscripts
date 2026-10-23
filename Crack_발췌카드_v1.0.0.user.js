@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         크랙 발췌 카드 | 문장 발췌 & 검열 프리셋
 // @namespace    https://crack.wrtn.ai/
-// @version      1.0.1
+// @version      1.0.3
 // @description  크랙 문장 선택 → 발췌 카드 (1440x1440 PNG). 검열 프리셋, 기본/커스텀 배경, Pretendard/부크크 명조 Light, 웹폰트 지원.
 // @match        https://crack.wrtn.ai/*
 // @match        https://*.crack.wrtn.ai/*
@@ -11,14 +11,14 @@
 
 (() => {
   'use strict';
-  if (window.__crackExcerptCardV101) return;
-  window.__crackExcerptCardV101 = true;
+  if (window.__crackExcerptCardV103) return;
+  window.__crackExcerptCardV103 = true;
 
   const KEY = 'crack-excerpt-card-v1';
-  const SIZE_PRESETS = { small:{label:'작게', body:58, title:24}, large:{label:'크게', body:70, title:24} };
+  const SIZE_PRESETS = { small:{label:'작게', body:54, title:28}, large:{label:'크게', body:62, title:28} };
   const FONT_BOOKK = 'https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302@1.0/BookkMyungjo-Lt.woff2';
-  const FONT_PRETENDARD = 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Regular.woff2';
-  const DEFAULTS = { theme:'cream', align:'center', font:'pretendard', sizeMode:'large',
+  const FONT_PRETENDARD = 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2';
+  const DEFAULTS = { theme:'cream', align:'center', font:'pretendard', sizeMode:'large', textColor:'auto',
     presets:[{id:'general',name:'기본 검열',rules:[]}], activePreset:'none', customFonts:[] };
   const THEMES = {
     cream:{name:'크림',bg:'#F3EEE7',fg:'#302D2A',sub:'#81786D'},
@@ -34,6 +34,7 @@
       const v=JSON.parse(localStorage.getItem(KEY)||'{}');
       const merged={...clone(DEFAULTS),...v, presets:Array.isArray(v.presets)?v.presets:clone(DEFAULTS.presets),customFonts:Array.isArray(v.customFonts)?v.customFonts:[]};
       if(!SIZE_PRESETS[merged.sizeMode]) merged.sizeMode='large';
+      if(!['auto','black','white'].includes(merged.textColor)) merged.textColor='auto';
       return merged;
     } catch {return clone(DEFAULTS);}
   }
@@ -116,6 +117,10 @@
   const alignGroup=group('정렬');const alignRow=row(alignGroup);
   btn(alignRow,'왼쪽 정렬',()=>{settings.align='left';persist();updateChips();scheduleRender();},'chip').dataset.align='left';
   btn(alignRow,'가운데 정렬',()=>{settings.align='center';persist();updateChips();scheduleRender();},'chip').dataset.align='center';
+  const colorGroup=group('글자색');const colorRow=row(colorGroup);
+  btn(colorRow,'자동',()=>{settings.textColor='auto';persist();updateChips();scheduleRender();},'chip').dataset.textColor='auto';
+  btn(colorRow,'검게',()=>{settings.textColor='black';persist();updateChips();scheduleRender();},'chip').dataset.textColor='black';
+  btn(colorRow,'희게',()=>{settings.textColor='white';persist();updateChips();scheduleRender();},'chip').dataset.textColor='white';
   const fontGroup=group('글꼴');const fontRow=row(fontGroup);
   const fontSelect=el('select',{'aria-label':'글꼴 선택'});fontSelect.style.flex='1';fontRow.append(fontSelect);
   fontSelect.addEventListener('change',()=>{settings.font=fontSelect.value;persist();scheduleRender();});
@@ -136,7 +141,6 @@
   const sizeGroup=group('본문 글자 크기');const sizeRow=row(sizeGroup);
   btn(sizeRow,'작게',()=>{settings.sizeMode='small';persist();updateChips();scheduleRender();},'chip').dataset.sizeMode='small';
   btn(sizeRow,'크게',()=>{settings.sizeMode='large';persist();updateChips();scheduleRender();},'chip').dataset.sizeMode='large';
-  sizeGroup.append(el('div',{class:'hint'},'리디 발췌 느낌에 맞춰 작게 / 크게 두 단계만 제공해요.'));
   footer.append(el('div',{class:'hint'},'1440 × 1440 PNG · 발췌문은 원본 대화에 반영되지 않아요.'));
   const shareBtn=btn(footer,'공유',()=>shareCard(),'secondary');
   btn(footer,'PNG 저장',()=>downloadCard(),'primary');
@@ -170,6 +174,7 @@
     root.querySelectorAll('button[data-theme]').forEach(b=>b.classList.toggle('active',b.dataset.theme===settings.theme));
     root.querySelectorAll('button[data-align]').forEach(b=>b.classList.toggle('active',b.dataset.align===settings.align));
     root.querySelectorAll('button[data-size-mode]').forEach(b=>b.classList.toggle('active',b.dataset.sizeMode===settings.sizeMode));
+    root.querySelectorAll('button[data-text-color]').forEach(b=>b.classList.toggle('active',b.dataset.textColor===settings.textColor));
   }
   function getQuote(){let s=quoteBox.value;const p=activePreset();if(p)for(const r of p.rules){if(r.from)s=s.split(r.from).join(r.to||'');}
     const chars=Array.from(s);return {text:chars.length>140?chars.slice(0,139).join('')+'⋯':s,length:chars.length,truncated:chars.length>140};
@@ -253,8 +258,11 @@
     const theme=THEMES[settings.theme]||THEMES.cream;
     let family;try{family=await ensureFont();}catch(e){family=settings.font==='bookk'?'serif':'sans-serif';status('웹폰트를 불러오지 못했어요. 연결 상태나 폰트 URL을 확인해 주세요.');}
     if(seq!==rendering||!modalOpen)return;
+    const baseFg=theme.fg||'#262626';
+    const fg = settings.textColor==='white' ? '#F8F7F3' : settings.textColor==='black' ? '#1F1F1F' : baseFg;
+    const sub = settings.textColor==='white' ? 'rgba(248,247,243,.76)' : settings.textColor==='black' ? 'rgba(31,31,31,.70)' : (theme.sub||'rgba(0,0,0,.65)');
     const ctx=canvas.getContext('2d');ctx.clearRect(0,0,1440,1440);ctx.fillStyle=theme.bg;ctx.fillRect(0,0,1440,1440);
-    if(bgImage){cover(ctx,bgImage);ctx.fillStyle=theme.fg==='#F4F0E9'?'rgba(0,0,0,.28)':'rgba(255,255,255,.18)';ctx.fillRect(0,0,1440,1440);}
+    if(bgImage){cover(ctx,bgImage);ctx.fillStyle=(settings.textColor==='white'||(settings.textColor==='auto'&&baseFg==='#F4F0E9'))?'rgba(0,0,0,.30)':'rgba(255,255,255,.18)';ctx.fillRect(0,0,1440,1440);}
     const preset=SIZE_PRESETS[settings.sizeMode]||SIZE_PRESETS.large;
     let size=preset.body,lines=[];const maxWidth=1120;
     do{ctx.font=`400 ${size}px "${family}"`;lines=wrap(ctx,text,maxWidth);if(lines.length*size*1.62+preset.title*2+110<=1010)break;size-=2;}while(size>=30);
@@ -263,9 +271,9 @@
     const bodyHeight=lines.length*lineHeight;const totalHeight=bodyHeight+titleGap+titleFont*1.4;
     let y=(1440-totalHeight)/2+lineHeight*.78;
     const x=settings.align==='center'?720:160;
-    ctx.textAlign=settings.align==='center'?'center':'left';ctx.textBaseline='alphabetic';ctx.fillStyle=theme.fg;
+    ctx.textAlign=settings.align==='center'?'center':'left';ctx.textBaseline='alphabetic';ctx.fillStyle=fg;
     for(const line of lines){ctx.fillText(line,x,y);y+=lineHeight;}
-    ctx.fillStyle=theme.sub;ctx.font=`400 ${titleFont}px "${family}"`;ctx.fillText(currentTitle,x,y+titleGap-lineHeight*.2);
+    ctx.fillStyle=sub;ctx.font=`400 ${titleFont}px "${family}"`;ctx.fillText(currentTitle,x,y+titleGap-lineHeight*.2);
   }
   let renderTimer=0;
   function scheduleRender(){clearTimeout(renderTimer);renderTimer=setTimeout(render,140);}
