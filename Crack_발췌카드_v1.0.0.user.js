@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         크랙 발췌 카드 | 문장 발췌 & 검열 프리셋
 // @namespace    https://crack.wrtn.ai/
-// @version      1.0.0
+// @version      1.0.1
 // @description  크랙 문장 선택 → 발췌 카드 (1440x1440 PNG). 검열 프리셋, 기본/커스텀 배경, Pretendard/부크크 명조 Light, 웹폰트 지원.
 // @match        https://crack.wrtn.ai/*
 // @match        https://*.crack.wrtn.ai/*
@@ -11,13 +11,14 @@
 
 (() => {
   'use strict';
-  if (window.__crackExcerptCardV100) return;
-  window.__crackExcerptCardV100 = true;
+  if (window.__crackExcerptCardV101) return;
+  window.__crackExcerptCardV101 = true;
 
   const KEY = 'crack-excerpt-card-v1';
+  const SIZE_PRESETS = { small:{label:'작게', body:58, title:24}, large:{label:'크게', body:70, title:24} };
   const FONT_BOOKK = 'https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302@1.0/BookkMyungjo-Lt.woff2';
   const FONT_PRETENDARD = 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Regular.woff2';
-  const DEFAULTS = { theme:'cream', align:'center', font:'pretendard', size:70, titleSize:30, spacing:24,
+  const DEFAULTS = { theme:'cream', align:'center', font:'pretendard', sizeMode:'large',
     presets:[{id:'general',name:'기본 검열',rules:[]}], activePreset:'none', customFonts:[] };
   const THEMES = {
     cream:{name:'크림',bg:'#F3EEE7',fg:'#302D2A',sub:'#81786D'},
@@ -31,7 +32,9 @@
   function load() {
     try {
       const v=JSON.parse(localStorage.getItem(KEY)||'{}');
-      return {...clone(DEFAULTS),...v, presets:Array.isArray(v.presets)?v.presets:clone(DEFAULTS.presets),customFonts:Array.isArray(v.customFonts)?v.customFonts:[]};
+      const merged={...clone(DEFAULTS),...v, presets:Array.isArray(v.presets)?v.presets:clone(DEFAULTS.presets),customFonts:Array.isArray(v.customFonts)?v.customFonts:[]};
+      if(!SIZE_PRESETS[merged.sizeMode]) merged.sizeMode='large';
+      return merged;
     } catch {return clone(DEFAULTS);}
   }
   let settings=load();
@@ -131,9 +134,9 @@
   btn(fontBtns,'선택 폰트 삭제',()=>{if(!settings.font.startsWith('font'))return;settings.customFonts=settings.customFonts.filter(x=>x.id!==settings.font);settings.font='pretendard';persist();refreshFonts();scheduleRender();});
   fontGroup.append(el('div',{class:'hint'},'직접 폰트 파일 URL 또는 .css 주소를 등록할 수 있어요. CSS 방식은 해당 CSS에 정의된 font-family 이름을 입력하면 정확해요.'));
   const sizeGroup=group('본문 글자 크기');const sizeRow=row(sizeGroup);
-  const fontSlider=el('input',{type:'range',min:'40',max:'100',step:'2'});fontSlider.style.flex='1';sizeRow.append(fontSlider);
-  const sizeVal=el('span',{},String(settings.size));sizeRow.append(sizeVal);
-  fontSlider.addEventListener('input',()=>{settings.size=Number(fontSlider.value);sizeVal.textContent=String(settings.size);persist();scheduleRender();});
+  btn(sizeRow,'작게',()=>{settings.sizeMode='small';persist();updateChips();scheduleRender();},'chip').dataset.sizeMode='small';
+  btn(sizeRow,'크게',()=>{settings.sizeMode='large';persist();updateChips();scheduleRender();},'chip').dataset.sizeMode='large';
+  sizeGroup.append(el('div',{class:'hint'},'리디 발췌 느낌에 맞춰 작게 / 크게 두 단계만 제공해요.'));
   footer.append(el('div',{class:'hint'},'1440 × 1440 PNG · 발췌문은 원본 대화에 반영되지 않아요.'));
   const shareBtn=btn(footer,'공유',()=>shareCard(),'secondary');
   btn(footer,'PNG 저장',()=>downloadCard(),'primary');
@@ -163,7 +166,11 @@
     for(const f of settings.customFonts)fontSelect.append(el('option',{value:f.id},f.name));
     if(![...fontSelect.options].some(x=>x.value===settings.font))settings.font='pretendard';fontSelect.value=settings.font;
   }
-  function updateChips(){root.querySelectorAll('button[data-theme]').forEach(b=>b.classList.toggle('active',b.dataset.theme===settings.theme));root.querySelectorAll('button[data-align]').forEach(b=>b.classList.toggle('active',b.dataset.align===settings.align));}
+  function updateChips(){
+    root.querySelectorAll('button[data-theme]').forEach(b=>b.classList.toggle('active',b.dataset.theme===settings.theme));
+    root.querySelectorAll('button[data-align]').forEach(b=>b.classList.toggle('active',b.dataset.align===settings.align));
+    root.querySelectorAll('button[data-size-mode]').forEach(b=>b.classList.toggle('active',b.dataset.sizeMode===settings.sizeMode));
+  }
   function getQuote(){let s=quoteBox.value;const p=activePreset();if(p)for(const r of p.rules){if(r.from)s=s.split(r.from).join(r.to||'');}
     const chars=Array.from(s);return {text:chars.length>140?chars.slice(0,139).join('')+'⋯':s,length:chars.length,truncated:chars.length>140};
   }
@@ -204,7 +211,7 @@
   async function open(){if(!selected){const hit=selectionText();selected=hit?.text||'';}if(!selected)return;
     original=selected;currentTitle=getTitle();quoteBox.value=original;titleLabel.textContent='작품명: '+currentTitle;
     modalOpen=true;backdrop.style.display='flex';bubbleHide();document.documentElement.style.overflow='hidden';
-    refreshPresets();refreshFonts();updateChips();fontSlider.value=String(settings.size);sizeVal.textContent=String(settings.size);
+    refreshPresets();refreshFonts();updateChips();
     bgImage=await getBackground();await render();
   }
   function loadFontFace(name,url,weight='400'){
@@ -248,10 +255,11 @@
     if(seq!==rendering||!modalOpen)return;
     const ctx=canvas.getContext('2d');ctx.clearRect(0,0,1440,1440);ctx.fillStyle=theme.bg;ctx.fillRect(0,0,1440,1440);
     if(bgImage){cover(ctx,bgImage);ctx.fillStyle=theme.fg==='#F4F0E9'?'rgba(0,0,0,.28)':'rgba(255,255,255,.18)';ctx.fillRect(0,0,1440,1440);}
-    let size=settings.size,lines=[];const maxWidth=1120;
-    do{ctx.font=`400 ${size}px "${family}"`;lines=wrap(ctx,text,maxWidth);if(lines.length*size*1.62+settings.titleSize*2+100<=1010)break;size-=2;}while(size>=30);
+    const preset=SIZE_PRESETS[settings.sizeMode]||SIZE_PRESETS.large;
+    let size=preset.body,lines=[];const maxWidth=1120;
+    do{ctx.font=`400 ${size}px "${family}"`;lines=wrap(ctx,text,maxWidth);if(lines.length*size*1.62+preset.title*2+110<=1010)break;size-=2;}while(size>=30);
     ctx.font=`400 ${Math.max(30,size)}px "${family}"`;
-    const lineHeight=Math.max(30,size)*1.62;const titleGap=100;const titleFont=settings.titleSize;
+    const lineHeight=Math.max(30,size)*1.62;const titleGap=110;const titleFont=preset.title;
     const bodyHeight=lines.length*lineHeight;const totalHeight=bodyHeight+titleGap+titleFont*1.4;
     let y=(1440-totalHeight)/2+lineHeight*.78;
     const x=settings.align==='center'?720:160;
