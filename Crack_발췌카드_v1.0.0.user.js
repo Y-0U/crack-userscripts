@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         크랙 발췌 카드 | 문장 발췌 & 검열 프리셋
 // @namespace    https://crack.wrtn.ai/
-// @version      1.0.3
+// @version      1.0.4
 // @description  크랙 문장 선택 → 발췌 카드 (1440x1440 PNG). 검열 프리셋, 기본/커스텀 배경, Pretendard/부크크 명조 Light, 웹폰트 지원.
 // @match        https://crack.wrtn.ai/*
 // @match        https://*.crack.wrtn.ai/*
@@ -11,21 +11,26 @@
 
 (() => {
   'use strict';
-  if (window.__crackExcerptCardV103) return;
-  window.__crackExcerptCardV103 = true;
+  if (window.__crackExcerptCardV104) return;
+  window.__crackExcerptCardV104 = true;
 
   const KEY = 'crack-excerpt-card-v1';
-  const SIZE_PRESETS = { small:{label:'작게', body:54, title:28}, large:{label:'크게', body:62, title:28} };
+  const SIZE_PRESETS = { small:{label:'작게', body:54, title:42}, large:{label:'크게', body:62, title:42} };
   const FONT_BOOKK = 'https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302@1.0/BookkMyungjo-Lt.woff2';
   const FONT_PRETENDARD = 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2';
-  const DEFAULTS = { theme:'cream', align:'center', font:'pretendard', sizeMode:'large', textColor:'auto',
+  const DEFAULTS = { theme:'cream', align:'center', font:'pretendard', sizeMode:'large', textColor:'black', useCustomBg:true,
     presets:[{id:'general',name:'기본 검열',rules:[]}], activePreset:'none', customFonts:[] };
   const THEMES = {
     cream:{name:'크림',bg:'#F3EEE7',fg:'#302D2A',sub:'#81786D'},
     paper:{name:'종이',bg:'#F9F7F2',fg:'#36332D',sub:'#827F75'},
     night:{name:'밤',bg:'#242631',fg:'#F4F0E9',sub:'#C1B7B3'},
     lavender:{name:'라벤더',bg:'#E5DDEB',fg:'#3C3345',sub:'#81738B'},
-    blue:{name:'안개',bg:'#DEE8EA',fg:'#29383C',sub:'#637D82'}
+    blue:{name:'안개',bg:'#DEE8EA',fg:'#29383C',sub:'#637D82'},
+    notebook:{name:'줄노트',bg:'#FBFAF5',fg:'#293344',sub:'#6D7380',style:'notebook'},
+    grid:{name:'모눈노트',bg:'#F4F8F7',fg:'#283C42',sub:'#697D7E',style:'grid'},
+    diary:{name:'일기장',bg:'#F6EEE4',fg:'#443A34',sub:'#89796D',style:'diary'},
+    memo:{name:'쪽지',bg:'#EBE7DF',fg:'#443C2E',sub:'#847458',style:'memo'},
+    letter:{name:'편지지',bg:'#F8F1E9',fg:'#443C3A',sub:'#897C72',style:'letter'}
   };
   const clean = s => String(s ?? '').replace(/\u00a0/g,' ').trim();
   const clone = o => JSON.parse(JSON.stringify(o));
@@ -34,7 +39,8 @@
       const v=JSON.parse(localStorage.getItem(KEY)||'{}');
       const merged={...clone(DEFAULTS),...v, presets:Array.isArray(v.presets)?v.presets:clone(DEFAULTS.presets),customFonts:Array.isArray(v.customFonts)?v.customFonts:[]};
       if(!SIZE_PRESETS[merged.sizeMode]) merged.sizeMode='large';
-      if(!['auto','black','white'].includes(merged.textColor)) merged.textColor='auto';
+      // v1.0.3에서 '자동'을 사용했다면 현재 배경에 어울리는 기본값으로 1회 전환합니다.
+      if(!['black','white'].includes(merged.textColor)) merged.textColor=merged.theme==='night'?'white':'black';
       return merged;
     } catch {return clone(DEFAULTS);}
   }
@@ -108,17 +114,36 @@
   presetSelect.addEventListener('change',()=>{settings.activePreset=presetSelect.value;persist();refreshRules();scheduleRender();});
   const ruleGroup=group('단어 치환 규칙');const ruleContainer=el('div');ruleGroup.append(ruleContainer);
   btn(ruleGroup,'+ 단어 치환 추가',()=>{const p=activePreset();if(!p){status('먼저 새 프리셋을 만들어 주세요.');return;}p.rules.push({from:'',to:''});persist();refreshRules();},'small');
-  const themeGroup=group('기본 디자인');const themeRow=row(themeGroup);
-  for(const [id,th] of Object.entries(THEMES))btn(themeRow,th.name,()=>{settings.theme=id;persist();updateChips();scheduleRender();},'chip').dataset.theme=id;
+  const themeGroup=group('배경 디자인');
+  const themeHint=(label)=>themeGroup.append(el('div',{class:'hint'},label));
+  themeHint('심플');
+  const plainThemes=row(themeGroup);
+  themeHint('종이 · 노트 · 쪽지');
+  const paperThemes=row(themeGroup);
+  for(const [id,th] of Object.entries(THEMES)){
+    const target=th.style?paperThemes:plainThemes;
+    btn(target,th.name,()=>{
+      if(settings.theme!==id){
+        settings.theme=id;
+        // 배경을 변경할 때는 잘 읽히는 색으로 시작하되, 사용자가 검게/희게 재선택할 수 있어요.
+        settings.textColor=id==='night'?'white':'black';
+      }
+      // 등록했던 배경 파일은 지우지 않고, 선택한 디자인을 우선 표시합니다.
+      settings.useCustomBg=false;
+      persist();updateChips();scheduleRender();
+    },'chip').dataset.theme=id;
+  }
   const bgGroup=group('커스텀 배경 이미지 (선택)');const bgRow=row(bgGroup);
   const bgInput=el('input',{type:'file',accept:'image/*'});bgInput.style.cssText='max-width:210px;font-size:12px';bgRow.append(bgInput);
-  btn(bgRow,'배경 삭제',async()=>{bgImage=null;await putBackground(null);bgInput.value='';scheduleRender();});
-  bgInput.addEventListener('change',async()=>{const file=bgInput.files?.[0];if(!file)return;try{bgImage=await imageFromBlob(file);await putBackground(file);scheduleRender();}catch(e){status('이미지를 불러올 수 없어요: '+e.message);}});
+  btn(bgRow,'등록 이미지 사용',()=>{if(!bgImage){status('등록된 배경 이미지가 없어요. 이미지를 먼저 선택해 주세요.');return;}
+    settings.useCustomBg=true;persist();scheduleRender();});
+  btn(bgRow,'배경 삭제',async()=>{bgImage=null;settings.useCustomBg=false;persist();await putBackground(null);bgInput.value='';scheduleRender();});
+  bgInput.addEventListener('change',async()=>{const file=bgInput.files?.[0];if(!file)return;try{bgImage=await imageFromBlob(file);settings.useCustomBg=true;persist();await putBackground(file);scheduleRender();}catch(e){status('이미지를 불러올 수 없어요: '+e.message);}});
+  bgGroup.append(el('div',{class:'hint'},'기본 디자인을 고르면 등록 이미지가 잠시 숨겨져요. 삭제되지 않으며 「등록 이미지 사용」으로 다시 적용할 수 있어요.'));
   const alignGroup=group('정렬');const alignRow=row(alignGroup);
   btn(alignRow,'왼쪽 정렬',()=>{settings.align='left';persist();updateChips();scheduleRender();},'chip').dataset.align='left';
   btn(alignRow,'가운데 정렬',()=>{settings.align='center';persist();updateChips();scheduleRender();},'chip').dataset.align='center';
   const colorGroup=group('글자색');const colorRow=row(colorGroup);
-  btn(colorRow,'자동',()=>{settings.textColor='auto';persist();updateChips();scheduleRender();},'chip').dataset.textColor='auto';
   btn(colorRow,'검게',()=>{settings.textColor='black';persist();updateChips();scheduleRender();},'chip').dataset.textColor='black';
   btn(colorRow,'희게',()=>{settings.textColor='white';persist();updateChips();scheduleRender();},'chip').dataset.textColor='white';
   const fontGroup=group('글꼴');const fontRow=row(fontGroup);
@@ -252,25 +277,131 @@
     return lines.length?lines:[''];
   }
   function cover(ctx,img){const scale=Math.max(1440/img.width,1440/img.height),w=img.width*scale,h=img.height*scale;ctx.drawImage(img,(1440-w)/2,(1440-h)/2,w,h);}
+  // 종이 질감과 선은 모두 Canvas로 그려서 외부 이미지 파일 없이 PNG에 그대로 저장됩니다.
+  function roundedPath(ctx,x,y,w,h,r){
+    const q=Math.min(r,w/2,h/2);
+    ctx.beginPath();ctx.moveTo(x+q,y);ctx.lineTo(x+w-q,y);ctx.quadraticCurveTo(x+w,y,x+w,y+q);
+    ctx.lineTo(x+w,y+h-q);ctx.quadraticCurveTo(x+w,y+h,x+w-q,y+h);
+    ctx.lineTo(x+q,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-q);
+    ctx.lineTo(x,y+q);ctx.quadraticCurveTo(x,y,x+q,y);ctx.closePath();
+  }
+  function softFiber(ctx,seed=19,n=520){
+    let state=seed;
+    const rnd=()=>{state=(Math.imul(1664525,state)+1013904223)>>>0;return state/4294967296;};
+    ctx.save();ctx.fillStyle='rgba(83,65,47,.07)';
+    for(let i=0;i<n;i++){
+      const x=rnd()*1440,y=rnd()*1440,w=.3+rnd()*1.2;
+      ctx.globalAlpha=.20+rnd()*.44;ctx.fillRect(x,y,w,.4+rnd()*1.1);
+    }
+    ctx.restore();
+  }
+  function tinyLeaf(ctx,x,y,scale=1,flip=1){
+    ctx.save();ctx.translate(x,y);ctx.scale(flip*scale,scale);
+    ctx.strokeStyle='rgba(123,116,92,.32)';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(0,70);ctx.quadraticCurveTo(8,25,23,-25);ctx.stroke();
+    for(const [bx,by,dx,dy] of [[7,38,-25,-18],[13,15,26,-19],[21,-12,-21,-24]]){
+      ctx.beginPath();ctx.moveTo(bx,by);ctx.quadraticCurveTo(bx+dx,by+dy,bx+dx*.75,by+dy*1.5);
+      ctx.quadraticCurveTo(bx+dx*.26,by+dy*.95,bx,by);ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawTemplateBackground(ctx,theme){
+    ctx.fillStyle=theme.bg;ctx.fillRect(0,0,1440,1440);
+    switch(theme.style){
+      case 'notebook':{
+        softFiber(ctx,57,630);
+        // 푸른 가로줄과 연한 붉은 여백선, 왼쪽 제본 구멍.
+        ctx.strokeStyle='rgba(92,144,186,.23)';ctx.lineWidth=2;
+        for(let y=208;y<1440;y+=76){ctx.beginPath();ctx.moveTo(138,y);ctx.lineTo(1440,y);ctx.stroke();}
+        ctx.strokeStyle='rgba(205,109,115,.29)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(177,0);ctx.lineTo(177,1440);ctx.stroke();
+        ctx.fillStyle='rgba(198,192,178,.39)';
+        for(const y of [250,550,850,1150]){
+          ctx.beginPath();ctx.arc(81,y,24,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#F5F3EB';ctx.beginPath();ctx.arc(81,y,17,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='rgba(198,192,178,.39)';
+        }
+        break;
+      }
+      case 'grid':{
+        softFiber(ctx,34,600);
+        for(let p=0;p<=1440;p+=48){
+          const thick=p%240===0;ctx.strokeStyle=thick?'rgba(119,174,184,.22)':'rgba(133,184,192,.105)';
+          ctx.lineWidth=thick?2:1;
+          ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,1440);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(1440,p);ctx.stroke();
+        }
+        ctx.strokeStyle='rgba(88,132,145,.19)';ctx.lineWidth=4;ctx.strokeRect(64,64,1312,1312);
+        break;
+      }
+      case 'diary':{
+        ctx.fillStyle='#E7DDD0';ctx.fillRect(0,0,1440,1440);
+        ctx.save();ctx.shadowColor='rgba(66,46,29,.16)';ctx.shadowBlur=36;ctx.shadowOffsetY=16;
+        roundedPath(ctx,72,65,1296,1310,24);ctx.fillStyle='#FBF4E9';ctx.fill();ctx.restore();
+        ctx.save();roundedPath(ctx,72,65,1296,1310,24);ctx.clip();
+        ctx.fillStyle='rgba(193,147,132,.08)';ctx.fillRect(112,65,51,1310);
+        ctx.strokeStyle='rgba(160,116,102,.18)';ctx.lineWidth=2;
+        ctx.setLineDash([5,9]);ctx.beginPath();ctx.moveTo(166,102);ctx.lineTo(166,1330);ctx.stroke();ctx.setLineDash([]);
+        ctx.strokeStyle='rgba(183,160,145,.16)';ctx.lineWidth=2;
+        for(let y=248;y<=1270;y+=102){ctx.beginPath();ctx.moveTo(206,y);ctx.lineTo(1286,y);ctx.stroke();}
+        ctx.restore();softFiber(ctx,41,550);
+        tinyLeaf(ctx,1187,185,1.45,-1);tinyLeaf(ctx,200,1233,1.18,1);
+        break;
+      }
+      case 'memo':{
+        ctx.fillStyle='#E7E2D9';ctx.fillRect(0,0,1440,1440);
+        softFiber(ctx,31,580);
+        ctx.save();ctx.translate(720,720);ctx.rotate(-.012);
+        ctx.shadowColor='rgba(83,71,49,.25)';ctx.shadowBlur=44;ctx.shadowOffsetY=19;
+        const grad=ctx.createLinearGradient(0,-627,0,630);grad.addColorStop(0,'#FFF3BE');grad.addColorStop(1,'#F6E8A9');
+        ctx.fillStyle=grad;roundedPath(ctx,-630,-626,1260,1254,8);ctx.fill();
+        ctx.shadowColor='transparent';ctx.strokeStyle='rgba(181,150,70,.16)';ctx.lineWidth=2;ctx.stroke();
+        ctx.restore();
+        // 실제 메모지처럼 위쪽에 반투명 마스킹 테이프 한 장.
+        ctx.save();ctx.translate(722,116);ctx.rotate(-.037);
+        ctx.fillStyle='rgba(225,207,172,.79)';ctx.fillRect(-127,-32,254,68);
+        ctx.strokeStyle='rgba(160,139,108,.21)';ctx.lineWidth=2;ctx.strokeRect(-127,-32,254,68);
+        ctx.restore();
+        break;
+      }
+      case 'letter':{
+        ctx.fillStyle='#F8EFE3';ctx.fillRect(0,0,1440,1440);softFiber(ctx,77,650);
+        ctx.strokeStyle='rgba(157,119,92,.40)';ctx.lineWidth=3;ctx.strokeRect(96,94,1248,1252);
+        ctx.strokeStyle='rgba(169,136,115,.19)';ctx.lineWidth=1.5;ctx.strokeRect(111,109,1218,1222);
+        const corner=(x,y,sx,sy)=>{
+          ctx.save();ctx.translate(x,y);ctx.scale(sx,sy);ctx.strokeStyle='rgba(147,113,94,.35)';ctx.lineWidth=3;
+          ctx.beginPath();ctx.moveTo(0,130);ctx.bezierCurveTo(9,57,25,22,130,0);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(36,77);ctx.bezierCurveTo(17,38,31,20,62,26);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(77,36);ctx.bezierCurveTo(42,16,49,4,69,8);ctx.stroke();
+          ctx.restore();
+        };
+        corner(130,130,1,1);corner(1310,130,-1,1);corner(130,1310,1,-1);corner(1310,1310,-1,-1);
+        break;
+      }
+      default:break;
+    }
+  }
   async function render(){if(!modalOpen)return;const seq=++rendering,statusBefore=stat.textContent;stat.textContent='';
     const {text,length,truncated}=getQuote();
     info.textContent=`${length}자 / 140자${truncated?' · 140자 이후는 ⋯로 처리':''} · 저장 크기 1440 × 1440px`;
     const theme=THEMES[settings.theme]||THEMES.cream;
     let family;try{family=await ensureFont();}catch(e){family=settings.font==='bookk'?'serif':'sans-serif';status('웹폰트를 불러오지 못했어요. 연결 상태나 폰트 URL을 확인해 주세요.');}
     if(seq!==rendering||!modalOpen)return;
-    const baseFg=theme.fg||'#262626';
-    const fg = settings.textColor==='white' ? '#F8F7F3' : settings.textColor==='black' ? '#1F1F1F' : baseFg;
-    const sub = settings.textColor==='white' ? 'rgba(248,247,243,.76)' : settings.textColor==='black' ? 'rgba(31,31,31,.70)' : (theme.sub||'rgba(0,0,0,.65)');
-    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,1440,1440);ctx.fillStyle=theme.bg;ctx.fillRect(0,0,1440,1440);
-    if(bgImage){cover(ctx,bgImage);ctx.fillStyle=(settings.textColor==='white'||(settings.textColor==='auto'&&baseFg==='#F4F0E9'))?'rgba(0,0,0,.30)':'rgba(255,255,255,.18)';ctx.fillRect(0,0,1440,1440);}
+    const fg=settings.textColor==='white'?'#F8F7F3':'#1F1F1F';
+    const sub=settings.textColor==='white'?'rgba(248,247,243,.78)':'rgba(31,31,31,.74)';
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,1440,1440);
+    if(bgImage&&settings.useCustomBg){
+      // 사용자 이미지는 배경 디자인 대신 사용하며, 글자의 명암을 살짝 확보합니다.
+      cover(ctx,bgImage);ctx.fillStyle=settings.textColor==='white'?'rgba(0,0,0,.30)':'rgba(255,255,255,.18)';
+      ctx.fillRect(0,0,1440,1440);
+    }else drawTemplateBackground(ctx,theme);
     const preset=SIZE_PRESETS[settings.sizeMode]||SIZE_PRESETS.large;
-    let size=preset.body,lines=[];const maxWidth=1120;
+    let size=preset.body,lines=[];const maxWidth=settings.align==='left'&&theme.style==='notebook'?1050:1120;
     do{ctx.font=`400 ${size}px "${family}"`;lines=wrap(ctx,text,maxWidth);if(lines.length*size*1.62+preset.title*2+110<=1010)break;size-=2;}while(size>=30);
     ctx.font=`400 ${Math.max(30,size)}px "${family}"`;
     const lineHeight=Math.max(30,size)*1.62;const titleGap=110;const titleFont=preset.title;
     const bodyHeight=lines.length*lineHeight;const totalHeight=bodyHeight+titleGap+titleFont*1.4;
     let y=(1440-totalHeight)/2+lineHeight*.78;
-    const x=settings.align==='center'?720:160;
+    const x=settings.align==='center'?720:(theme.style==='notebook'?218:160);
     ctx.textAlign=settings.align==='center'?'center':'left';ctx.textBaseline='alphabetic';ctx.fillStyle=fg;
     for(const line of lines){ctx.fillText(line,x,y);y+=lineHeight;}
     ctx.fillStyle=sub;ctx.font=`400 ${titleFont}px "${family}"`;ctx.fillText(currentTitle,x,y+titleGap-lineHeight*.2);
