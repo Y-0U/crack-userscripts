@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🗨️크랙 대사 수신자
 // @namespace    https://crack.wrtn.ai/
-// @version      1.1.0
+// @version      1.2.0
 // @description  채팅방별 인물 등록, 대사별 수신자/제외대상 선택, 원문에 수신자 표기 적용. 입력창을 대체하지 않습니다.
 // @match        https://crack.wrtn.ai/*
 // @match        https://*.crack.wrtn.ai/*
@@ -10,8 +10,8 @@
 // ==/UserScript==
 (() => {
  'use strict';
- if (window.__crackDialogueTargetsV110) return;
- window.__crackDialogueTargetsV110 = true;
+ if (window.__crackDialogueTargetsV120) return;
+ window.__crackDialogueTargetsV120 = true;
  const KEY='crack-dialogue-targets-v1';
  const host=document.createElement('div');host.id='cdt-host';host.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483600';
  const shadow=host.attachShadow({mode:'open'});
@@ -21,6 +21,7 @@
  .cdt-chip{pointer-events:auto;position:fixed;z-index:2;border:1px solid #c8bfd1;background:#fff;color:#43374f;border-radius:8px;padding:3px 7px;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 2px 8px #0003;cursor:pointer;font-size:12px}
  .cdt-chip.on{background:#49355c;color:white;border-color:#49355c}
  .cdt-rail{position:fixed;display:none;pointer-events:auto;z-index:3;background:rgba(255,255,255,.94);border:1px solid #d6cede;border-radius:13px;padding:5px;box-shadow:0 5px 16px #0002;backdrop-filter:blur(10px);align-items:center;gap:5px}
+ .cdt-handle{display:flex;align-items:center;justify-content:center;min-width:24px;height:27px;border-radius:8px;background:#eee8f4;color:#6b537f;cursor:grab;touch-action:none;user-select:none;font-size:15px}.cdt-handle:active{cursor:grabbing}
  .cdt-rail button{border:0;background:transparent;color:#392f45;border-radius:9px;padding:6px 8px;cursor:pointer;font-weight:700;font-size:12px;white-space:nowrap}
  .cdt-rail button:hover{background:#f1eaf6}
  .cdt-rail .cdt-apply{background:#49355c;color:#fff}
@@ -36,12 +37,19 @@
  .cdt-dropdown{position:fixed;z-index:4;pointer-events:auto;background:white;color:#27232d;border:1px solid #d8cfdf;border-radius:10px;box-shadow:0 5px 24px #0004;max-height:230px;overflow:auto;min-width:145px;max-width:min(260px,90vw);padding:5px}
  .cdt-option{display:block;width:100%;text-align:left;border:0;background:white;color:#29232e;padding:8px 10px;cursor:pointer;border-radius:6px}.cdt-option:hover{background:#f0eaf4}
  @media(max-width:680px){.cdt-button{padding:6px 10px;font-size:12px}.cdt-chip{font-size:11px;padding:3px 5px}.cdt-dialog{max-height:92dvh}}
- </style><div class="cdt-rail"><button class="cdt-settings">⚙ 수신자</button><button class="cdt-apply">✓ 반영</button></div><div class="cdt-alert"></div><div id="chips"></div><div id="dropdown"></div><div class="cdt-shade"><div class="cdt-dialog"></div></div>`;
+ </style><div class="cdt-rail"><span class="cdt-handle" title="끌어서 위치 이동">⠿</span><button class="cdt-settings">⚙ 수신자</button><button class="cdt-apply">✓ 반영</button></div><div class="cdt-alert"></div><div id="chips"></div><div id="dropdown"></div><div class="cdt-shade"><div class="cdt-dialog"></div></div>`;
  document.documentElement.append(host);
  const rail=shadow.querySelector('.cdt-rail'), settingsButton=shadow.querySelector('.cdt-settings'), applyButton=shadow.querySelector('.cdt-apply'), alertBox=shadow.querySelector('.cdt-alert'), chips=shadow.querySelector('#chips'), menu=shadow.querySelector('#dropdown'),shade=shadow.querySelector('.cdt-shade'),dialog=shadow.querySelector('.cdt-dialog');
  const safeJSON=(v,fallback)=>{try{return JSON.parse(v)}catch{return fallback}};
  let db=safeJSON(localStorage.getItem(KEY),{});if(!db||typeof db!=='object')db={};
  let active=null,room='',selectedKeys=new Map(),lastText='',lastRoom='',timer=0,settingsOpen=false,menuOpen=false;
+ let dragPos=safeJSON(localStorage.getItem(KEY+'-position'),null),dragging=null;
+ const dragHandle=shadow.querySelector('.cdt-handle');
+ function savePosition(){try{localStorage.setItem(KEY+'-position',JSON.stringify(dragPos))}catch{}}
+ function placeRail(r){const w=rail.offsetWidth||190,h=rail.offsetHeight||40;const x=dragPos?.x??(r.right-w-9),y=dragPos?.y??(r.top+5);rail.style.left=Math.max(5,Math.min(innerWidth-w-5,x))+'px';rail.style.top=Math.max(5,Math.min(innerHeight-h-5,y))+'px'}
+ dragHandle.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();const rr=rail.getBoundingClientRect();dragging={startX:e.clientX,startY:e.clientY,left:rr.left,top:rr.top};dragHandle.setPointerCapture(e.pointerId)});
+ dragHandle.addEventListener('pointermove',e=>{if(!dragging)return;e.preventDefault();const w=rail.offsetWidth,h=rail.offsetHeight;dragPos={x:Math.max(5,Math.min(innerWidth-w-5,dragging.left+e.clientX-dragging.startX)),y:Math.max(5,Math.min(innerHeight-h-5,dragging.top+e.clientY-dragging.startY))};placeRail(active?.getBoundingClientRect()||{right:innerWidth,top:0})});
+ const finishDrag=()=>{if(dragging){dragging=null;savePosition()}};dragHandle.addEventListener('pointerup',finishDrag);dragHandle.addEventListener('pointercancel',finishDrag);
  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){console.warn('[크랙 대사 수신자] 저장 실패',e)}};
  const getRoom=()=>location.pathname+location.search;
  const config=()=>{if(!db[room])db[room]={characters:[]};return db[room]};
@@ -101,7 +109,7 @@
  function pick(q,rect){hideMenu();menuOpen=true;const choices=[['','지정 없음']];for(const name of config().characters){choices.push([name,name],[name+'::except',name+'− (제외한 현장 전원)'])}
   if(choices.length===1)choices.push(['','⚙️ 먼저 캐릭터를 등록해 주세요']);
   const dd=document.createElement('div');dd.className='cdt-dropdown';dd.style.cssText=`left:${Math.max(7,Math.min(innerWidth-268,rect.left))}px;top:${Math.max(7,Math.min(innerHeight-244,rect.bottom+3))}px`;
-  for(const [val,label]of choices){const b=document.createElement('button');b.className='cdt-option';b.textContent=label;b.onclick=()=>{if(val)selectedKeys.set(keyOf(q),val);else selectedKeys.delete(keyOf(q));hideMenu();renderChips()};dd.append(b)}menu.append(dd);
+  for(const [val,label]of choices){const b=document.createElement('button');b.className='cdt-option';b.textContent=label;b.onclick=()=>{if(val)selectedKeys.set(keyOf(q),val);else selectedKeys.delete(keyOf(q));hideMenu();renderChips();notice(val?'대상 선택됨 · ✓ 반영을 눌러 입력창에 적용하세요.':'대상 지정 해제됨')};dd.append(b)}menu.append(dd);
  }
  function renderChips(){
   chips.replaceChildren();if(!active||settingsOpen)return;
@@ -126,15 +134,15 @@
  }
  function update(){
   if(settingsOpen)return;
-  const candidate=getEditor(),nextRoom=getRoom();
+  let candidate=getEditor();const nextRoom=getRoom();
+  if(active?.isConnected&&active!==candidate){const r=active.getBoundingClientRect();if(r.width>120&&r.height>20&&r.bottom>0&&r.top<innerHeight)candidate=active;}
   if(nextRoom!==room){room=nextRoom;selectedKeys.clear();lastText='';hideMenu()}
   if(candidate!==active){active=candidate;selectedKeys.clear();lastText='';hideMenu()}
   if(!active){rail.style.display='none';chips.replaceChildren();return}
   const r=active.getBoundingClientRect();
   if(r.width<220||r.height<68){rail.style.display='none';chips.replaceChildren();return}
   rail.style.display='flex';
-  rail.style.left=Math.max(8,Math.min(innerWidth-174,r.right-184))+'px';
-  rail.style.top=Math.max(8,Math.min(innerHeight-43,r.top+5))+'px';
+  placeRail(r);
   const txt=valueOf(active);if(txt!==lastText){reconcile(lastText,txt);lastText=txt}
   renderChips();
  }
@@ -149,17 +157,19 @@
   row.append(action('캐릭터 저장',()=>{config().characters=[...new Set(input.value.split(/[\n,]/).map(s=>s.trim()).filter(Boolean))];save();hideMenu();showSettingsList();},true),action('닫기',close));
   const list=node('div');list.id='cdt-options';dialog.append(list);
   dialog.append(node('p','입력창 안 오른쪽의 ‘1 · 대상’ 버튼에서 지정해요. “이름−”는 그 인물을 제외한 현재 장면의 전원에게 하는 말이에요.','cdt-hint'));
-  dialog.append(node('p','전송 전에 아래의 “수신자 반영”을 누르면, 선택한 대사에만 [A에게] 같은 짧은 표기가 실제 입력창에 삽입돼요. 지정하지 않은 대사는 그대로 유지됩니다.','cdt-hint'));
+  dialog.append(node('p','전송 전에 “✓ 반영”을 누르면, 선택한 대사에만 [A에게] 같은 표기가 삽입돼요. 창 왼쪽 ⠿ 손잡이를 드래그하면 수신자·반영 패널 위치를 옮길 수 있어요.','cdt-hint'));
   dialog.append(action('선택한 수신자 반영',()=>{const ok=apply();if(ok)close()},true));
   function showSettingsList(){list.textContent='등록됨: '+(config().characters.flatMap(n=>[n,n+'−']).join(' · ')||'없음')}showSettingsList();
  }
  function apply(){
   if(!active){notice('입력창을 찾지 못했어요.');return false}
   const before=valueOf(active),after=transform(before);
-  if(after===before){notice(selectedKeys.size?'이미 반영되었어요.':'먼저 대사 옆 번호 버튼에서 수신자를 선택해 주세요.');return false}
+  if(after===before){notice(selectedKeys.size?'수신자를 찾았지만 문장 매칭이 달라졌어요. 다시 선택해 주세요.':'먼저 대사 옆 번호 버튼에서 수신자를 선택해 주세요.');return false}
   // Don't clear choices until the actual editor content has updated.
   const ok=setValue(active,after);
-  if(ok){selectedKeys.clear();lastText=after;renderChips();notice('✓ 입력창에 수신자를 반영했어요.');return true}
+  if(ok){selectedKeys.clear();lastText=after;renderChips();notice('✓ 입력창에 수신자를 반영했어요.');
+    const target=active;setTimeout(()=>{if(target?.isConnected&&valueOf(target).replace(/\r\n/g,'\n')!==after.replace(/\r\n/g,'\n')){notice('크랙 입력창이 변경을 되돌렸어요. 복사용 창을 열게요.');showFallback(after)}},220);
+    return true}
   notice('입력창 반영을 확인하지 못했어요. 복사해서 붙여넣을 수 있도록 설정을 열어 주세요.');
   showFallback(after);return false;
  }
