@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         📱 Crack Mobile Utility (모바일 유틸 합본)+
+// @name         📱Crack 모바일 합본+
 // @namespace    crack-mobile-utility
-// @version      4.9.2
-// @description  4.9.2: 대시보드 턴수 실시간 갱신(전송 직후 서버 재확인 · 새 메시지 감지 · 캐시 우회 · 제한적 재시도). 4.9.1: 소설/채팅 전환을 새로고침 없이 바로(PC 합본과 같은 방식, 저장 실패 때는 되돌림), 로그 캡처 글 폭 넓힘(설정 '글 폭' 좁게·보통·넓게, 기본 480), 문단 앞 −·이름표 옆 × 로 빼고 + 로 되살리기, 미리보기·결과 화면이 상하좌우로 밀리거나 확대되던 것 잠금. 4.9.0: 로그 캡처 새로 짬 — 마지막 턴·최근 3턴·범위·유저 제외로 고르기, 미리보기가 곧 결과(문단·이름표 눌러 빼기·되돌리기·쪽 나뉨 점선), 나눠서(1080px 여러 장) 또는 한 장(아이폰 한도보다 길면 토막으로 그려 PNG 하나로 이어 붙임), 아이폰은 공유 창으로 사진 앱에 바로 저장, PNG·WebP, 테마 5개 다듬음(성좌 새 장식·스펙시트 여백), 외부 라이브러리 없이 직접 그림, 카메라 아이콘 새로. 4.8.0: 긴 방 가볍게 — 오래된 대화 숨기기(남길 최근 대화 턴 수)·화면 밖 메시지 그리기 생략(PC 합본에서 옮김, 접기·펼치기는 손을 떼고 멈췄을 때만·보던 자리 유지). 4.7.0: 라존데를 크랙 모델과 겹치는 모델만·크랙 순서·크랙 아이콘으로(양쪽 새 모델 자동), 울트라챗 등 새 모델 아이콘 '?'·모델 숨기기 창 중복 수정, 보낸 뒤·탭 다녀온 뒤 테마 풀림 수정, 미니사이드바 모델 그림 크기, 모델 버튼 자리 계정별(입력창 오른쪽·왼쪽·방 위쪽 바) 대응, 라존데 요청 줄이기(묶음 20개). 4.6.3: 미니사이드바 모델 버튼에 지금 모델 이미지 표시. 4.6.2: 10/13 크랙 개편 대응(모델 버튼이 전송 버튼 옆으로 이동 — 미니사이드바 모델 버튼을 켜면 원래 버튼은 숨김, 로어 버튼 자리), 라디오존데를 한 번에 받기(모델마다 따로 묻지 않음). 4.6.1: 최신 메시지 기준 초안 전송 확인, 완료·삭제 배지 부분 갱신, 대시보드 중복 DOM 교체 감소. 4.6.0: 9/30 크랙 개편 대응(분기 방 배지·전송 감지·초안 정리·캐릭터 채팅·유저노트 길게 눌러 선택), 긴 방·홈·방 이동 반복 작업과 메모리 누수 최적화, 라디오존데 복구(CDN 직접 조회·신규 모델 자동 추가·GM.xmlHttpRequest 호환)와 줄 간격 고정, 미니사이드바 문체 변경, 정보바 숫자 애니메이션, 전체화면·입력창 펼치기 SVG 아이콘. 허브 SVG 복원, 모델 맨 왼쪽 배치 및 전환 버튼 간격 수정. 미니사이드바 다크/라이트·소설/채팅 전환. 코드블록 자동 줄바꿈, 라이트 테마 코드·보조 글자 대비 수정, 테마 판별 통일, DOM·캐시·라디오존데 반복 처리 최적화. 모바일용 합본: 입력창 설정·초안 자동 저장·입력 글자수 카운터·우측 상단 펼치기 버튼, 상단바 접기, 빈 전송 방지, 엔딩 버튼 숨김, 와이드뷰, 글씨/이미지 크기, 썸네일 움짤 정지, 라디오존데 인라인, 대시보드 원본식 정보바/미니사이드바(게임 HUD·모바일 삽화·Wish RP Manager 바로가기 포함), 글자수·시간 배지·답변별 모델·실측 크래커, 메시지 길게 누르기 메뉴, 로그 캡처, 외부 테마 자동 공존
+// @version      4.9.3
+// @description  4.9.3: iOS 완료 이벤트 누락 시 서버 메시지 확인으로 크래커 집계 복구 · 미집계 차감 표시 개선. 4.9.2: 대시보드 턴수 실시간 갱신(전송 직후 서버 재확인 · 새 메시지 감지 · 캐시 우회 · 제한적 재시도). 4.9.1: 소설/채팅 전환을 새로고침 없이 바로(PC 합본과 같은 방식, 저장 실패 때는 되돌림), 로그 캡처 글 폭 넓힘(설정 '글 폭' 좁게·보통·넓게, 기본 480), 문단 앞 −·이름표 옆 × 로 빼고 + 로 되살리기, 미리보기·결과 화면이 상하좌우로 밀리거나 확대되던 것 잠금. 4.9.0: 로그 캡처 새로 짬 — 마지막 턴·최근 3턴·범위·유저 제외로 고르기, 미리보기가 곧 결과(문단·이름표 눌러 빼기·되돌리기·쪽 나뉨 점선), 나눠서(1080px 여러 장) 또는 한 장(아이폰 한도보다 길면 토막으로 그려 PNG 하나로 이어 붙임), 아이폰은 공유 창으로 사진 앱에 바로 저장, PNG·WebP, 테마 5개 다듬음(성좌 새 장식·스펙시트 여백), 외부 라이브러리 없이 직접 그림, 카메라 아이콘 새로. 4.8.0: 긴 방 가볍게 — 오래된 대화 숨기기(남길 최근 대화 턴 수)·화면 밖 메시지 그리기 생략(PC 합본에서 옮김, 접기·펼치기는 손을 떼고 멈췄을 때만·보던 자리 유지). 4.7.0: 라존데를 크랙 모델과 겹치는 모델만·크랙 순서·크랙 아이콘으로(양쪽 새 모델 자동), 울트라챗 등 새 모델 아이콘 '?'·모델 숨기기 창 중복 수정, 보낸 뒤·탭 다녀온 뒤 테마 풀림 수정, 미니사이드바 모델 그림 크기, 모델 버튼 자리 계정별(입력창 오른쪽·왼쪽·방 위쪽 바) 대응, 라존데 요청 줄이기(묶음 20개). 4.6.3: 미니사이드바 모델 버튼에 지금 모델 이미지 표시. 4.6.2: 10/13 크랙 개편 대응(모델 버튼이 전송 버튼 옆으로 이동 — 미니사이드바 모델 버튼을 켜면 원래 버튼은 숨김, 로어 버튼 자리), 라디오존데를 한 번에 받기(모델마다 따로 묻지 않음). 4.6.1: 최신 메시지 기준 초안 전송 확인, 완료·삭제 배지 부분 갱신, 대시보드 중복 DOM 교체 감소. 4.6.0: 9/30 크랙 개편 대응(분기 방 배지·전송 감지·초안 정리·캐릭터 채팅·유저노트 길게 눌러 선택), 긴 방·홈·방 이동 반복 작업과 메모리 누수 최적화, 라디오존데 복구(CDN 직접 조회·신규 모델 자동 추가·GM.xmlHttpRequest 호환)와 줄 간격 고정, 미니사이드바 문체 변경, 정보바 숫자 애니메이션, 전체화면·입력창 펼치기 SVG 아이콘. 허브 SVG 복원, 모델 맨 왼쪽 배치 및 전환 버튼 간격 수정. 미니사이드바 다크/라이트·소설/채팅 전환. 코드블록 자동 줄바꿈, 라이트 테마 코드·보조 글자 대비 수정, 테마 판별 통일, DOM·캐시·라디오존데 반복 처리 최적화. 모바일용 합본: 입력창 설정·초안 자동 저장·입력 글자수 카운터·우측 상단 펼치기 버튼, 상단바 접기, 빈 전송 방지, 엔딩 버튼 숨김, 와이드뷰, 글씨/이미지 크기, 썸네일 움짤 정지, 라디오존데 인라인, 대시보드 원본식 정보바/미니사이드바(게임 HUD·모바일 삽화·Wish RP Manager 바로가기 포함), 글자수·시간 배지·답변별 모델·실측 크래커, 메시지 길게 누르기 메뉴, 로그 캡처, 외부 테마 자동 공존
 // @author       Assistant
 // @match        *://crack.wrtn.ai/*
 // @run-at       document-idle
@@ -30,7 +30,7 @@
 
 (() => {
     'use strict';
-    const VERSION = '4.9.2';
+    const VERSION = '4.9.3';
     const CMU_RUNTIME_ATTR = 'data-cmu-runtime-version';
     const CMU_RUNTIME_KEY = '__CRACK_MOBILE_UTILITY_RUNTIME__';
     const runtimeRoot = document.documentElement;
@@ -12894,9 +12894,11 @@
             DASH.state.logs = snap.logs || null;
             if (snap.balance != null)
                 DASH.state.balance = snap.balance;
+            // The short-lived screen snapshot must not overwrite newer durable
+            // measurements from the per-room ledger.
             if (snap.cumulative != null)
-                DASH.state.cumulative = Number(snap.cumulative) || 0;
-            if (snap.lastDiff != null)
+                DASH.state.cumulative = Math.max(DASH.state.cumulative, Number(snap.cumulative) || 0);
+            if (snap.lastDiff != null && !DASH.state.lastDiff)
                 DASH.state.lastDiff = Number(snap.lastDiff) || 0;
             renderDashboardParts();
         }
@@ -12964,8 +12966,11 @@
             turnDetail += `&nbsp;<span style="opacity:.75;">(${hints.join(' · ')})</span>`;
         parts.push({ key: 'turn', summaryHtml: turnSummary, detailHtml: turnDetail });
         const cum = DASH.state.cumulative;
-        const cumSummary = `${DASH_ICON.bittenCracker}${dashNum('cumulative', cum)}개`;
-        const cumDetail = `${DASH_ICON.bittenCracker}<span style="opacity:.75;margin-right:2px;">누적 사용 크래커 · 추정 포함</span>${dashNum('cumulative', cum)}개`;
+        const measuredSinceInstall = cum > 0 || Object.keys(loadCumCache(chatId).counted || {}).length > 0;
+        const cumValue = measuredSinceInstall ? dashNum('cumulative', cum)
+            : '<span style="font-weight:700;">—</span>';
+        const cumSummary = `${DASH_ICON.bittenCracker}${cumValue}개`;
+        const cumDetail = `${DASH_ICON.bittenCracker}<span style="opacity:.75;margin-right:2px;">${measuredSinceInstall ? '누적 사용 크래커 · 집계분' : '누적 사용 · 아직 집계된 내역 없음'}</span>${cumValue}개`;
         parts.push({ key: 'cumulative', summaryHtml: cumSummary, detailHtml: cumDetail });
         const bal = DASH.state.balance;
         if (bal !== null && bal !== undefined) {
@@ -12978,8 +12983,10 @@
             parts.push({ key: 'cracker', summaryHtml: `${DASH_ICON.cracker}<span style="font-weight:700;">—</span>개`, detailHtml: `${DASH_ICON.cracker}<span style="opacity:.75;margin-right:2px;">잔여</span><span style="font-weight:700;">—</span>개` });
         }
         const diff = DASH.state.lastDiff || 0;
-        if (diff > 0) {
-            const html = `<span style="display:inline-flex;align-items:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-right:2px;flex-shrink:0;"><polygon points="4,8 20,8 12,18"></polygon></svg>${dashNum('deducted', diff)}개</span>`;
+        {
+            const downIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="margin-right:2px;flex-shrink:0;"><polygon points="4,8 20,8 12,18"></polygon></svg>';
+            const diffValue = diff > 0 ? dashNum('deducted', diff) : '<span style="font-weight:700;">—</span>';
+            const html = `<span style="display:inline-flex;align-items:center;">${downIcon}${diffValue}개</span>`;
             parts.push({ key: 'deducted', summaryHtml: html, detailHtml: html });
         }
         const vis = parts.filter(p => visible[p.key] !== false);
@@ -13141,6 +13148,10 @@
             knownGroupIds, attempts: 0, checking: false, recheckRequested: false, probeTimer: 0,
         };
         DASH.activeSession = session;
+        // Safari Userscripts can miss page-world generate_done entirely. The turn
+        // probe verifies user messages, but costs require the assistant message ID.
+        // Watch only this explicit send and dedupe against the native event handler.
+        if (cmuCostCollectionWanted()) cacWatchAssistantForCost(session);
         // Fallback if a native generate_done signal never reaches Safari Userscripts.
         scheduleDashboardLiveProbe(session, 900);
     }
@@ -14738,6 +14749,7 @@
         deletedKeepMs: 7 * 24 * 60 * 60 * 1000,
         pendingStarts: new Map(),
         pendingJobs: new Map(),
+        serverWatches: new Map(),
         seenDoneEvents: new Set(),
         tabId: '',
         costsCacheChatId: '',
@@ -14990,9 +15002,12 @@
         return measured;
     }
     async function cacPollAndMeasure(job) {
-        for (const delay of [0, 700, 1200, 2000, 3500, 5500]) {
+        // The assistant message can appear before billing is recorded. Retry a
+        // bounded number of times, without background polling after leaving the room.
+        for (const delay of [0, 900, 1600, 2800, 4500, 7000, 11000, 16000, 23000, 32000]) {
             if (delay) await sleep(delay);
-            if (!cmuCostCollectionWanted() || cacIsDeleted(job.chatId, job.messageId)) return;
+            if (!cmuCostCollectionWanted() || getChatId() !== job.chatId ||
+                cacIsDeleted(job.chatId, job.messageId)) return;
             try {
                 const candidates = cacFindHistoryCandidates(await fetchRecentHistoryItems(20), job);
                 if (!cmuCostCollectionWanted()) return;
@@ -15002,6 +15017,78 @@
             } catch (error) { console.debug(LOG, 'answer cost retry', error); }
         }
     }
+    // On iOS Safari, dataLayer.push from the page context may never be visible to
+    // a content userscript. The turn counter already has an API-first fallback,
+    // but the cost collector previously had none, leaving cumulative=0 and
+    // last deduction absent. Use the same authenticated read-only message API.
+    const CAC_ASSISTANT_CHECK_DELAYS = [700, 1400, 2400, 4000, 6500, 10000, 16000, 25000, 38000, 55000];
+    function cacRawAssistantTimestamp(message, messageId) {
+        for (const value of [message?.createdAt, message?.created_at,
+            message?.message?.createdAt, message?.timestamp]) {
+            if (value == null) continue;
+            let timestamp = typeof value === 'number' ? value : Date.parse(String(value));
+            if (typeof value === 'number' && timestamp > 0 && timestamp < 1e12) timestamp *= 1000;
+            if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+        }
+        // MongoDB ObjectIds encode the server creation time to the nearest second.
+        const date = objectIdToDate(messageId);
+        return date ? date.getTime() : 0;
+    }
+    function cacWatchAssistantForCost(session) {
+        if (!cmuCostCollectionWanted() || !session?.chatId) return;
+        const chatId = session.chatId;
+        const old = CAC.serverWatches.get(chatId);
+        if (old) {
+            if (Date.now() - old.startedAt < 1500) return; // one tap may yield two send signals
+            if (old.timer) clearTimeout(old.timer);
+        }
+        // Capture a pre-send head-page snapshot when present; never ascribe an
+        // already existing assistant reply to the newly submitted message.
+        const cachedRows = CMU_SHARED.rooms.get(chatId)?.first?.arr || [];
+        const baselineIds = new Set(cachedRows.filter(isRawAssistantMessage).map(rawMessageIdOf));
+        const job = { chatId, startedAt: session.startedAt || Date.now(), baselineIds,
+            timer: 0, attempts: 0, checking: false };
+        CAC.serverWatches.set(chatId, job);
+        const remembered = CAC.pendingStarts.get(chatId);
+        if (!remembered || Math.abs(job.startedAt - remembered.startedAt) > 2000)
+            cacRememberGenerationStart({ chat_id: chatId });
+        const stop = () => {
+            if (job.timer) clearTimeout(job.timer);
+            job.timer = 0;
+            if (CAC.serverWatches.get(chatId) === job) CAC.serverWatches.delete(chatId);
+        };
+        const probe = async () => {
+            job.timer = 0;
+            if (CAC.serverWatches.get(chatId) !== job || !cmuCostCollectionWanted() ||
+                getChatId() !== chatId || job.checking) { stop(); return; }
+            job.checking = true;
+            try {
+                const page = await cmuSharedMessagePage(chatId, '', true);
+                if (CAC.serverWatches.get(chatId) !== job || getChatId() !== chatId) { stop(); return; }
+                const candidates = (page?.arr || [])
+                    .filter(row => isRawAssistantMessage(row) && !isRawPrologueMessage(row))
+                    .map(row => ({ id: rawMessageIdOf(row), at: cacRawAssistantTimestamp(row, rawMessageIdOf(row)) }))
+                    .filter(row => isObjectId(row.id) && !job.baselineIds.has(row.id) &&
+                        row.at >= job.startedAt - 1200 && row.at <= Date.now() + 5000)
+                    .sort((a, b) => b.at - a.at || b.id.localeCompare(a.id));
+                if (candidates.length) {
+                    // Existing generate_done observer and this fallback share one
+                    // deduplicated cost job; never count the same history twice.
+                    cacHandleGenerateDone({ chat_id: chatId, msg_id: candidates[0].id });
+                    stop();
+                    return;
+                }
+            } catch (error) {
+                try { console.debug(LOG, 'iOS cost server probe', error); } catch (_) { }
+            } finally { job.checking = false; }
+            if (CAC.serverWatches.get(chatId) !== job) return;
+            const delay = CAC_ASSISTANT_CHECK_DELAYS[job.attempts++];
+            if (delay === undefined) { stop(); return; }
+            job.timer = setTimeout(probe, delay);
+        };
+        job.timer = setTimeout(probe, 900);
+    }
+
     function cacEventParts(entry) {
         if (!entry)
             return { name: '', meta: {} };
@@ -19221,5 +19308,9 @@
         }
         catch (_) { }
     };
+    CMU_RESOURCES.cleanups.push(() => {
+        for (const watch of CAC.serverWatches.values()) if (watch.timer) clearTimeout(watch.timer);
+        CAC.serverWatches.clear();
+    });
     log(`loaded ${VERSION}`);
 })();
