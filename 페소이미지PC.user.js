@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         👤페소 이미지 PC
 // @namespace    https://github.com/workforomg/Utill
-// @version      1.0.5.4
+// @version      1.0.5.5
 // @author       지유지요
-// @description  대화 프로필별 이미지를 로컬에 저장하고, 선택한 이미지를 전송된 유저 메시지 위에 표시합니다. 붙이기 기능 포함. 이미지/이름을 채팅 서버에 전송하지 않습니다.
+// @description  대화 프로필별 이미지를 로컬에 저장하고, 선택한 이미지를 전송된 유저 메시지 위에 표시합니다. 붙이기 및 이미지 순서 변경 기능 포함. 이미지/이름을 채팅 서버에 전송하지 않습니다.
 // @match        https://crack.wrtn.ai/*
 // @inject-into  content
 // @run-at       document-start
@@ -1229,6 +1229,12 @@
       .cpi-remove { padding:2px 7px;min-height:26px;font-size:12px; }
       .cpi-row-actions { display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;margin-top:0; }
       .cpi-row-actions .cpi-remove { flex:0 0 auto;margin-left:auto;font-size:11px;padding-inline:6px; }
+      .cpi-order-controls { display:inline-flex;gap:4px;align-items:center;flex-wrap:nowrap; }
+      .cpi-order-controls .cpi-order-button { min-width:30px;min-height:27px;padding:2px 5px;font-size:13px; }
+      .cpi-drag-handle { cursor:grab;touch-action:none; }
+      .cpi-drag-handle:active { cursor:grabbing; }
+      .cpi-image-row.cpi-drag-over { outline:2px dashed var(--text_brand,var(--cpi-accent));outline-offset:2px; }
+      .cpi-image-row.cpi-dragging { opacity:.55; }
       .cpi-default-label { display:inline-flex;align-items:center;gap:5px;min-width:0;min-height:28px;color:var(--text_primary,var(--cpi-fg));font:500 12px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer; }
       .cpi-default-label span { word-break:keep-all; }
       .cpi-default-check { appearance:auto;display:block;position:static;flex:0 0 15px;width:15px;height:15px;min-width:15px;margin:0;padding:0;accent-color:var(--text_brand,var(--cpi-accent));cursor:pointer; }
@@ -1322,8 +1328,20 @@
       const list = el('div', { class: 'cpi-list' });
       const error = el('p', { class: 'cpi-small cpi-error', role: 'status' });
       const help = el('p', { class: 'cpi-small cpi-default-help', id: `cpi-default-help-${uuid()}` }, '선택된 기본설정 이미지가 없으면, 선택 안 함이 기본이 됩니다.\n선택 시, 매 입력 때마다 해당 이미지가 자동 선택됩니다.');
-      modal.body.append(toolbar, help, list, error, el('p', { class: 'cpi-small' }, '여러 장을 한 번에 선택할 수 있습니다. 한 장 20MB 이하. 목록에서 빼도 과거 메시지에 연결된 원본은 보존합니다.'));
+      modal.body.append(toolbar, help, list, error, el('p', { class: 'cpi-small' }, '여러 장을 한 번에 선택할 수 있습니다. 한 장 20MB 이하. ↑↓ 또는 ⠿ 드래그로 순서를 바꾼 뒤 저장해 주세요. 목록에서 빼도 과거 메시지에 연결된 원본은 보존합니다.'));
       const defaultChecks = new Map();
+      let draggingImageId = null;
+      // Reorder only catalog metadata. Image IDs/assets and existing message links stay untouched.
+      const moveImage = (sourceId, targetId) => {
+        if (modal.busy || !sourceId || !targetId || sourceId === targetId) return;
+        const from = modal.images.findIndex(item => item.id === sourceId);
+        const to = modal.images.findIndex(item => item.id === targetId);
+        if (from < 0 || to < 0) return;
+        const [moved] = modal.images.splice(from, 1);
+        modal.images.splice(to, 0, moved);
+        modal.dirty = true;
+        render();
+      };
       const syncDefaultChecks = () => {
         for (const [imageId, check] of defaultChecks) check.checked = imageId === modal.defaultImageId;
       };
@@ -1336,8 +1354,22 @@
         count.textContent = `${modal.images.length}장`;
         list.replaceChildren(); defaultChecks.clear();
         if (!modal.images.length) list.append(el('div', { class: 'cpi-empty' }, '이미지를 불러온 뒤 이름을 정해 주세요.'));
-        for (const image of modal.images) {
-          const row = el('div', { class: 'cpi-image-row' });
+        for (const [imageIndex, image] of modal.images.entries()) {
+          const row = el('div', { class: 'cpi-image-row', 'data-cpi-image-id': image.id });
+          row.addEventListener('dragover', event => {
+            if (modal.busy || !draggingImageId || draggingImageId === image.id) return;
+            event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+            row.classList.add('cpi-drag-over');
+          });
+          row.addEventListener('dragleave', event => {
+            if (!row.contains(event.relatedTarget)) row.classList.remove('cpi-drag-over');
+          });
+          row.addEventListener('drop', event => {
+            event.preventDefault(); row.classList.remove('cpi-drag-over');
+            const sourceId = draggingImageId;
+            draggingImageId = null;
+            if (sourceId) moveImage(sourceId, image.id);
+          });
           row.append(el('img', { class: 'cpi-thumb-large', src: image.thumb, alt: image.name, loading: 'lazy', decoding: 'async' }));
           const fields = el('div', { class: 'cpi-row-fields' });
           const name = el('input', { class: 'cpi-name', type: 'text', maxlength: '80', 'aria-label': '이미지 이름', placeholder: '이미지 이름' });
@@ -1359,13 +1391,42 @@
             modal.dirty = true; syncDefaultChecks();
           });
           defaultLabel.append(check, el('span', {}, '기본설정 이미지'));
+          const orderControls = el('div', { class: 'cpi-order-controls' });
+          const moveUp = button('↑', () => {
+            if (imageIndex > 0) moveImage(image.id, modal.images[imageIndex - 1].id);
+          }, 'cpi-button cpi-order-button');
+          moveUp.setAttribute('aria-label', `${image.name} · 순서 위로`);
+          moveUp.title = '이미지 순서 위로'; moveUp.disabled = imageIndex === 0;
+          const moveDown = button('↓', () => {
+            if (imageIndex < modal.images.length - 1) moveImage(image.id, modal.images[imageIndex + 1].id);
+          }, 'cpi-button cpi-order-button');
+          moveDown.setAttribute('aria-label', `${image.name} · 순서 아래로`);
+          moveDown.title = '이미지 순서 아래로'; moveDown.disabled = imageIndex === modal.images.length - 1;
+          const drag = el('button', {
+            type: 'button', class: 'cpi-button cpi-order-button cpi-drag-handle',
+            draggable: 'true', 'aria-label': `${image.name} · 드래그해서 순서 변경`, title: '끌어서 순서 변경'
+          }, '⠿');
+          drag.addEventListener('dragstart', event => {
+            if (modal.busy) { event.preventDefault(); return; }
+            draggingImageId = image.id;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', image.id);
+            row.classList.add('cpi-dragging');
+          });
+          drag.addEventListener('dragend', () => {
+            draggingImageId = null;
+            for (const node of list.querySelectorAll('.cpi-drag-over,.cpi-dragging')) {
+              node.classList.remove('cpi-drag-over', 'cpi-dragging');
+            }
+          });
+          orderControls.append(moveUp, moveDown, drag);
           const remove = button('목록에서 빼기', () => {
             if (modal.busy) return;
             modal.images = modal.images.filter(item => item.id !== image.id);
             if (modal.defaultImageId === image.id) modal.defaultImageId = null;
             modal.dirty = true; render();
           }, 'cpi-button cpi-remove');
-          actions.append(defaultLabel, remove);
+          actions.append(defaultLabel, orderControls, remove);
           fields.append(name, el('span', { class: 'cpi-small' }, `${image.width} × ${image.height} · ${(image.size / 1024 / 1024).toFixed(1)}MB`), actions);
           row.append(fields); list.append(row);
         }
