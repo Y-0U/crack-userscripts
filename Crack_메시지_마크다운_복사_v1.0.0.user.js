@@ -1,31 +1,58 @@
 // ==UserScript==
-// @name         크랙 메시지 마크다운 원문 복사
+// @name         크랙 메시지 마크다운 원문 복사 (PC·모바일)
 // @namespace    https://crack.wrtn.ai/userscripts/original-raw-copy
-// @version      1.0.0
+// @version      1.2.0
 // @description  내가 보낸 메시지의 '분기 / 수정 / 삭제' 메뉴에 '복사'를 추가하고, 마크다운 원문을 복사합니다.
 // @match        https://crack.wrtn.ai/*
 // @match        https://*.crack.wrtn.ai/*
 // @run-at       document-idle
+// @inject-into  content
 // @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        GM_setClipboard
+// @grant        GM.setClipboard
 // @connect      crack-api.wrtn.ai
 // @connect      contents-api.wrtn.ai
 // ==/UserScript==
 
 (() => {
   'use strict';
-  const INSTANCE_KEY = '__crackOriginalMessageCopy_v100';
+  const INSTANCE_KEY = '__crackOriginalMessageCopy_v120';
   if (window[INSTANCE_KEY]) return;
   window[INSTANCE_KEY] = true;
 
   const GROUP_SELECTOR = '[data-message-group-id], [data-message-id]';
   const MENU_SELECTOR = '[role="menu"]';
-  const TRIGGER_SELECTOR = '[aria-haspopup="menu"],button[aria-label="메시지 옵션"],button[title="메시지 옵션"]';
+  const TRIGGER_SELECTOR = '[aria-haspopup="menu"],[data-state][aria-controls],button[aria-label*="옵션"],button[title*="옵션"]';
+  const gmModern = typeof GM !== 'undefined' && GM ? GM : null;
+  const gmRequestAPI = typeof GM_xmlhttpRequest === 'function'
+    ? GM_xmlhttpRequest
+    : typeof gmModern?.xmlHttpRequest === 'function' ? gmModern.xmlHttpRequest.bind(gmModern) : null;
+  const gmClipboardAPI = typeof GM_setClipboard === 'function'
+    ? GM_setClipboard
+    : typeof gmModern?.setClipboard === 'function' ? gmModern.setClipboard.bind(gmModern) : null;
   const OWN_ITEM_ID = 'data-cmc-original-copy';
   let lastOrigin = null;
   let queued = false;
   let toastTimer = 0;
   let copyPending = false;
+  // 원문을 미리 조회하면 메뉴를 누르는 즉시 클립보드 쓰기를 시작할 수 있어
+  // iOS Safari에서 사용자 제스처 제한에 걸릴 가능성을 낮춘다.
+  const prefetched = new Map();
+  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const cacheKey = origin => `${origin.chatId}/${origin.messageId}`;
+  function prefetchOriginal(origin) {
+    if (!origin || chatIdFromUrl() !== origin.chatId) return null;
+    const key = cacheKey(origin);
+    const cached = prefetched.get(key);
+    if (cached && Date.now() - cached.at < 90000) return cached.promise;
+    const promise = fetchOriginal(origin.chatId, origin.messageId);
+    prefetched.set(key, { at: Date.now(), promise });
+    if (prefetched.size > 16) prefetched.delete(prefetched.keys().next().value);
+    promise.catch(() => { if (prefetched.get(key)?.promise === promise) prefetched.delete(key); });
+    return promise;
+  }
 
   const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim();
   const safeId = value => typeof value === 'string' && value.length > 0 && value.length < 220 && value !== 'temp';
@@ -67,7 +94,11 @@
       }
     }
     if (lastOrigin && Date.now() - lastOrigin.at < 12000 && lastOrigin.href === location.href) {
-      if (!labelId || !lastOrigin.triggerId || labelId === lastOrigin.triggerId) return lastOrigin;
+      // iOS Safari의 Radix 메뉴는 aria-labelledby와 실제 터치 지점의
+      // 버튼 ID가 다르거나 존재하지 않을 수 있다. 현재 열린 메뉴가
+      // 사용자의 '수정/삭제' 메뉴인지 검사한 뒤에만 최근 메시지를 사용한다.
+      if (!labelId || !lastOrigin.triggerId || labelId === lastOrigin.triggerId ||
+          isMyMessageMenu(menu)) return lastOrigin;
     }
     return null;
   }
@@ -93,6 +124,7 @@
     const prev = menu.querySelector(`[${OWN_ITEM_ID}]`);
     if (prev) {
       prev.__cmcOrigin = origin;
+      prefetchOriginal(origin);
       return;
     }
     const items = menuItems(menu);
@@ -111,10 +143,17 @@
     row.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;min-height:36px;padding:6px 12px;user-select:none;-webkit-user-select:none;';
     row.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>복사</span>`;
     row.__cmcOrigin = origin;
+    prefetchOriginal(origin);
 
     row.addEventListener('pointerdown', event => { event.stopPropagation(); }, true);
     row.addEventListener('mousedown', event => { event.stopPropagation(); }, true);
     row.addEventListener('touchstart', event => { event.stopPropagation(); }, {passive:true, capture:true});
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        row.click();
+      }
+    });
     row.addEventListener('click', async event => {
       event.preventDefault();
       event.stopPropagation();
@@ -125,14 +164,25 @@
       row.style.opacity = '.55';
       try {
         if (chatIdFromUrl() !== target.chatId) throw new Error('채팅방이 변경되었어요. 다시 시도해 주세요.');
-        const original = await fetchOriginal(target.chatId, target.messageId);
+        const cached = prefetched.get(cacheKey(target));
+        const original = await (cached?.promise || prefetchOriginal(target));
         if (!original) throw new Error('원문이 비어 있어요.');
         try {
-          await putOnClipboard(original);
-          showToast('마크다운 원문을 복사했어요 ✓');
+          // iOS에서는 성공 여부를 확정할 수 없는 GM_setClipboard를 사용하지 않는다.
+          // 페이지의 표준 Clipboard API를 사용하고 읽기 확인이 불가능하면
+          // '복사 완료'라고 말하지 않고 직접 복사 창을 제공한다.
+          const result = await putOnClipboard(original);
+          if (result === 'verified') {
+            showToast('마크다운 원문 복사를 확인했어요 ✓');
+          } else if (result === 'unverified') {
+            showManualCopy(original, '자동 복사를 요청했지만 클립보드 반영 여부를 확인할 수 없어요. 붙여넣기가 안 된다면 아래 「전체 선택」으로 복사해 주세요.');
+            showToast('클립보드 확인이 제한되어 직접 복사 창도 열었어요.');
+          } else {
+            showToast('마크다운 원문을 복사했어요 ✓');
+          }
         } catch (error) {
           showManualCopy(original);
-          showToast('복사 권한이 없어 직접 복사 창을 열었어요.');
+          showToast('자동 복사가 제한되어 직접 복사 창을 열었어요.');
         }
       } catch (error) {
         console.warn('[크랙 마크다운 복사]', error);
@@ -164,11 +214,15 @@
   }
 
   function captureOrigin(event) {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-    const group = findGroup(target);
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    const target = event.target instanceof Element ? event.target :
+      path.find(node => node instanceof Element) || null;
+    if (!target || target.closest(`[${OWN_ITEM_ID}]`)) return;
+    // Safari의 합성 이벤트/Shadow DOM에서도 실제 메시지 그룹을 추적한다.
+    const group = findGroup(target) || path.map(findGroup).find(Boolean);
     if (!group) return;
-    const trigger = target.closest(TRIGGER_SELECTOR);
+    const trigger = target.closest(TRIGGER_SELECTOR) ||
+      path.find(node => node instanceof Element && node.matches(TRIGGER_SELECTOR)) || null;
     // 메뉴 버튼을 누르거나 모바일에서 메시지를 꾹 누르는 경우 모두 추적.
     const origin = makeOrigin(group, trigger);
     if (origin) {
@@ -178,6 +232,7 @@
   }
 
   document.addEventListener('pointerdown', captureOrigin, true);
+  document.addEventListener('touchstart', captureOrigin, {capture:true, passive:true});
   document.addEventListener('contextmenu', captureOrigin, true);
   document.addEventListener('click', event => {
     captureOrigin(event);
@@ -202,21 +257,41 @@
 
   function gmRequest(url, headers) {
     return new Promise((resolve, reject) => {
+      if (!gmRequestAPI) {
+        reject(new Error('Userscripts의 GM 네트워크 기능을 사용할 수 없어요.'));
+        return;
+      }
+      let finished = false;
+      const done = (error, response) => {
+        if (finished) return;
+        finished = true;
+        if (error) { reject(error); return; }
+        if (!response || !(response.status >= 200 && response.status < 300)) {
+          reject(new Error(`API ${response?.status || '연결 실패'}`)); return;
+        }
+        try {
+          const raw = typeof response.responseText === 'string' ? response.responseText
+            : typeof response.response === 'string' ? response.response
+            : response.response && typeof response.response === 'object' ? null : '';
+          resolve(raw === null ? response.response : JSON.parse(raw));
+        } catch {
+          reject(new Error('원문 응답을 해석할 수 없어요.'));
+        }
+      };
       const options = {
-        method:'GET', url, headers, timeout:12000, withCredentials:true,
-        onload: response => {
-          if (response.status < 200 || response.status >= 300) return reject(new Error(`API ${response.status}`));
-          try { resolve(JSON.parse(response.responseText)); }
-          catch { reject(new Error('원문 응답을 해석할 수 없어요.')); }
-        },
-        onerror: () => reject(new Error('API 연결 실패')),
-        ontimeout: () => reject(new Error('API 응답 시간 초과')),
+        method:'GET', url, headers, timeout:12000,
+        onload: response => done(null, response),
+        onerror: () => done(new Error('API 연결 실패')),
+        ontimeout: () => done(new Error('API 응답 시간 초과')),
+        onabort: () => done(new Error('API 요청 취소')),
       };
       try {
-        if (typeof GM_xmlhttpRequest === 'function') return void GM_xmlhttpRequest(options);
-        if (typeof GM !== 'undefined' && typeof GM.xmlHttpRequest === 'function') return void GM.xmlHttpRequest(options);
-        reject(new Error('확장 프로그램 API를 사용할 수 없어요.'));
-      } catch (error) { reject(error); }
+        const handle = gmRequestAPI(options);
+        // iOS Userscripts의 GM.xmlHttpRequest는 Promise를 반환할 수 있음.
+        if (handle && typeof handle.then === 'function') {
+          Promise.resolve(handle).then(response => done(null, response), error => done(error));
+        }
+      } catch (error) { done(error); }
     });
   }
 
@@ -227,14 +302,18 @@
       try { headers.Authorization = 'Bearer ' + decodeURIComponent(token); }
       catch { headers.Authorization = 'Bearer ' + token; }
     }
+    // Safari에서는 기본 GM 요청이 제공되지 않는 설치도 있어서
+    // 로그인된 페이지의 fetch를 먼저 사용하고 GM을 대체 경로로 사용한다.
+    // PC에서는 기존 GM 경로도 그대로 지원한다.
+    let firstError = null;
+    try {
+      const response = await fetch(url, {method:'GET',headers,credentials:'include',mode:'cors'});
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      return await response.json();
+    } catch (error) { firstError = error; }
+    if (!gmRequestAPI) throw firstError;
     try { return await gmRequest(url, headers); }
-    catch (firstError) {
-      try {
-        const response = await fetch(url, {method:'GET',headers,credentials:'include',mode:'cors'});
-        if (!response.ok) throw new Error(`API ${response.status}`);
-        return await response.json();
-      } catch { throw firstError; }
-    }
+    catch (error) { throw new Error(`${error.message} (페이지 연결: ${firstError?.message || '실패'})`); }
   }
 
   function unwrapMessage(result) {
@@ -281,20 +360,33 @@
   }
 
   async function putOnClipboard(text) {
-    // 관리자에서 제공하는 클립보드 API를 먼저 사용해 iOS의 비동기 권한 문제를 피함.
-    if (typeof GM_setClipboard === 'function') {
-      await Promise.resolve(GM_setClipboard(text, 'text'));
-      return;
-    }
-    if (typeof GM !== 'undefined' && typeof GM.setClipboard === 'function') {
-      await GM.setClipboard(text, 'text');
-      return;
+    if (isIOS) {
+      if (!navigator.clipboard?.writeText) throw new Error('Safari 클립보드 API 없음');
+      await navigator.clipboard.writeText(text);
+      // 읽기 권한은 쓰기 권한과 별개이므로 readText 실패는 예상 가능한 상황.
+      if (navigator.clipboard?.readText) {
+        try {
+          const pasted = await navigator.clipboard.readText();
+          if (pasted === text) return 'verified';
+          throw new Error('클립보드에 원문이 반영되지 않았어요.');
+        } catch (error) {
+          if (error?.message?.includes('반영되지')) throw error;
+          return 'unverified';
+        }
+      }
+      return 'unverified';
     }
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
+      try {
+        await navigator.clipboard.writeText(text);
+        return 'written';
+      } catch (_) { /* PC에서 GM 경로 재시도 */ }
     }
-    throw new Error('클립보드 권한 없음');
+    if (gmClipboardAPI) {
+      await Promise.resolve(gmClipboardAPI(text, 'text'));
+      return 'written';
+    }
+    throw new Error('클립보드 쓰기 API 없음');
   }
 
   function showToast(message, isError = false) {
@@ -308,7 +400,7 @@
     toastTimer=setTimeout(()=>toast.remove(),isError?4500:2200);
   }
 
-  function showManualCopy(text) {
+  function showManualCopy(text, explanation = '자동 복사가 제한되어 있어요. 아래 원문을 길게 누르거나 선택해서 복사해 주세요.') {
     document.getElementById('cmc-manual-backdrop')?.remove();
     const backdrop = document.createElement('div');
     backdrop.id = 'cmc-manual-backdrop';
@@ -318,7 +410,7 @@
     const heading = document.createElement('strong');
     heading.textContent = '마크다운 원문 복사';
     const help = document.createElement('div');
-    help.textContent = '자동 복사가 제한되어 있어요. 아래 원문을 길게 누르거나 선택해서 복사해 주세요.';
+    help.textContent = explanation;
     const field = document.createElement('textarea');
     field.readOnly = true;
     field.value = text;
@@ -333,7 +425,21 @@
     closeBtn.textContent='닫기';
     for (const button of [selectBtn,copyBtn,closeBtn]) button.style.cssText='border:1px solid #ddd;border-radius:8px;background:#f8f7f9;color:#222;font:600 13px system-ui;padding:10px;cursor:pointer;';
     selectBtn.onclick=()=>{field.focus();field.select();};
-    copyBtn.onclick=async()=>{try{await putOnClipboard(text);showToast('마크다운 원문을 복사했어요 ✓');backdrop.remove();}catch{field.focus();field.select();try{if(document.execCommand('copy')){showToast('복사했어요 ✓');backdrop.remove();return;}}catch{}showToast('원문을 선택했어요. 복사 메뉴를 이용해 주세요.');}};
+    copyBtn.onclick=async()=>{
+      try {
+        const result=await putOnClipboard(text);
+        if(result==='verified'||result==='written'){
+          showToast('마크다운 원문 복사 완료 ✓');backdrop.remove();return;
+        }
+      }catch(_){ /* 사용자 선택으로 이동 */ }
+      field.focus();field.select();field.setSelectionRange(0,field.value.length);
+      // execCommand는 보조 경로지만 성공 반환값만으로 신뢰할 수 없어
+      // iOS에서는 반드시 수동 복사 상태를 유지한다.
+      if(!isIOS) {
+        try {if(document.execCommand('copy')){showToast('원문을 복사했어요 ✓');backdrop.remove();return;}}catch(_){}
+      }
+      showToast('원문을 전체 선택했어요. iPhone 복사 메뉴를 눌러 주세요.');
+    };
     closeBtn.onclick=()=>backdrop.remove();
     actions.append(selectBtn,copyBtn,closeBtn);pane.append(heading,help,field,actions);backdrop.append(pane);
     backdrop.addEventListener('click',event=>{if(event.target===backdrop)backdrop.remove();});
